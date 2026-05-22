@@ -1,0 +1,77 @@
+# Architectural enforcement: keeps the core domain free of any carrier
+# or infrastructure knowledge. CI fails if anyone tries to import an
+# adapter into core.
+#
+# Install: go install github.com/fe3dback/go-arch-lint@latest
+# Run:     go-arch-lint check
+
+version: 3
+workdir: .
+
+components:
+  ports:
+    in: internal/ports/**
+  core:
+    in: internal/core/**
+  adapters:
+    in: internal/adapters/**
+  infra:
+    in: internal/infra/**
+  carrier_registry:
+    in: internal/carrier/**
+  config:
+    in: internal/config/**
+  app:
+    in: internal/app/**
+  cmd:
+    in: cmd/**
+  tests:
+    in: tests/**
+
+deps:
+  core:
+    mayDependOn:
+      - ports
+      - core
+  ports:
+    mayDependOn:
+      - ports
+  adapters:
+    mayDependOn:
+      - ports
+      - core
+  infra:
+    mayDependOn:
+      - ports
+      - core
+      - app
+      - carrier_registry
+  carrier_registry:
+    mayDependOn:
+      - ports
+      - adapters
+  config:
+    mayDependOn:
+      - carrier_registry
+      - adapters
+  app:
+    mayDependOn:
+      - ports
+      - core
+      - carrier_registry
+      - infra
+      - config
+  cmd:
+    mayDependOn:
+      - app
+      - config
+      - infra
+      - carrier_registry
+  tests:
+    mayDependOn:
+      - ports
+      - core
+      - adapters
+      - infra
+      - carrier_registry
+      - app

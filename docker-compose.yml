@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dashfetchr-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dashfetchr
+      POSTGRES_PASSWORD: dashfetchr
+      POSTGRES_DB: dashfetchr
+    ports:
+      - "5432:5432"
+    volumes:
+      - dashfetchr-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dashfetchr -d dashfetchr"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: dashfetchr-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - dashfetchr-redis:/data
+
+  localstack:
+    image: localstack/localstack:3
+    container_name: dashfetchr-localstack
+    restart: unless-stopped
+    environment:
+      - SERVICES=s3,sqs,sns
+      - DEBUG=0
+    ports:
+      - "4566:4566"
+    volumes:
+      - dashfetchr-localstack:/var/lib/localstack
+
+  adminer:
+    image: adminer
+    container_name: dashfetchr-adminer
+    restart: unless-stopped
+    ports:
+      - "8090:8080"
+    depends_on:
+      - postgres
+
+volumes:
+  dashfetchr-pg:
+  dashfetchr-redis:
+  dashfetchr-localstack:

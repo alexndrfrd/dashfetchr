@@ -1,0 +1,14 @@
+bin/
+*.log
+.env
+.env.local
+.DS_Store
+.idea/
+.vscode/
+*.test
+*.out
+coverage.*
+node_modules/
+.next/
+dist/
+tmp/
