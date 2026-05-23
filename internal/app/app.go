@@ -6,8 +6,11 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"dashfetchr/internal/app/booking"
 	"dashfetchr/internal/app/custodyapp"
@@ -20,6 +23,7 @@ import (
 	"dashfetchr/internal/core/routing"
 	"dashfetchr/internal/infra/events"
 	"dashfetchr/internal/infra/memory"
+	"dashfetchr/internal/infra/postgres"
 	"dashfetchr/internal/ports"
 )
 
@@ -29,6 +33,7 @@ type App struct {
 	Logger   *slog.Logger
 	Carriers *carrier.Registry
 	Bus      ports.EventBus
+	Pool     *pgxpool.Pool // nil when using in-memory storage
 
 	Booking  *booking.Service
 	Dispatch *dispatch.Service
@@ -51,6 +56,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	var delRepo ports.DeliveryRepository
 	var routingRepo ports.RoutingDecisionRepository
 	var custodyRepo custody.Repository
+	var pool *pgxpool.Pool
 
 	if cfg.DB.UseMemory {
 		awbRepo = memory.NewAWBRepo()
@@ -59,7 +65,16 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		custodyRepo = memory.NewCustodyRepo()
 		logger.Info("storage: in-memory (set USE_MEMORY_STORE=false for Postgres)")
 	} else {
-		return nil, fmt.Errorf("postgres repositories not implemented yet; set USE_MEMORY_STORE=true")
+		ctx := context.Background()
+		pool, err = postgres.NewPool(ctx, cfg.DB.URL, cfg.DB.MaxConns)
+		if err != nil {
+			return nil, err
+		}
+		awbRepo = postgres.NewAWBRepo(pool)
+		delRepo = postgres.NewDeliveryRepo(pool)
+		routingRepo = postgres.NewRoutingRepo(pool)
+		custodyRepo = postgres.NewCustodyRepo(pool)
+		logger.Info("storage: postgres", "url", redactDBURL(cfg.DB.URL))
 	}
 
 	ledger := custody.NewLedger(custodyRepo)
@@ -78,6 +93,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		Logger:   logger,
 		Carriers: reg,
 		Bus:      bus,
+		Pool:     pool,
 		Booking: booking.New(booking.Deps{
 			AWBs:       awbRepo,
 			Deliveries: delRepo,
@@ -101,4 +117,34 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 			Logger:     logger,
 		}),
 	}, nil
+}
+
+// PingDB checks Postgres connectivity when a pool is configured.
+func (a *App) PingDB(ctx context.Context) error {
+	if a.Pool == nil {
+		return nil
+	}
+	return a.Pool.Ping(ctx)
+}
+
+func redactDBURL(url string) string {
+	// Avoid logging passwords in startup logs.
+	const needle = "://"
+	i := 0
+	if j := indexOf(url, needle); j >= 0 {
+		i = j + len(needle)
+	}
+	if at := indexOf(url[i:], "@"); at > 0 {
+		return url[:i] + "***@" + url[i+at+1:]
+	}
+	return url
+}
+
+func indexOf(s, sub string) int {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return i
+		}
+	}
+	return -1
 }

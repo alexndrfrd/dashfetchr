@@ -1,22 +1,27 @@
-# Postgres adapters (M1)
+# Postgres adapters
 
-Implement repository interfaces here:
+Implements repository interfaces with `pgx` + `pgxpool` against `migrations/`.
 
-| Interface | File (planned) |
+| Interface | Implementation |
 |-----------|----------------|
 | `ports.AWBRepository` | `awb_repo.go` |
 | `ports.DeliveryRepository` | `delivery_repo.go` |
 | `custody.Repository` | `custody_repo.go` |
 | `ports.RoutingDecisionRepository` | `routing_repo.go` |
 
-Use `pgx` + `sqlc` against `migrations/0001_initial.up.sql`.
+## Local setup
 
-Wire in `internal/app/app.go` when `USE_MEMORY_STORE=false`:
-
-```go
-pool, err := postgres.NewPool(cfg.DB.URL)
-awbRepo = postgres.NewAWBRepo(pool)
-// ...
+```bash
+make docker-up
+make migrate          # requires golang-migrate CLI, or use docker per Makefile comment
+USE_MEMORY_STORE=false make run-api
 ```
 
-Until then, local dev uses `internal/infra/memory`.
+Integration tests:
+
+```bash
+make migrate
+make test-integration
+```
+
+Wired in `internal/app/app.go` when `USE_MEMORY_STORE=false`.

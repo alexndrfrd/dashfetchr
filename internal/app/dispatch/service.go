@@ -94,6 +94,30 @@ func (s *Service) DispatchDelivery(ctx context.Context, deliveryID uuid.UUID) er
 	return nil
 }
 
+// DispatchPending finds pending deliveries and dispatches up to limit of them.
+// Returns the number successfully dispatched.
+func (s *Service) DispatchPending(ctx context.Context, limit int) (int, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	pending, err := s.deps.Deliveries.ListByState(ctx, delivery.StatePending, limit)
+	if err != nil {
+		return 0, err
+	}
+	var ok int
+	for _, del := range pending {
+		if err := s.DispatchDelivery(ctx, del.ID); err != nil {
+			s.deps.Logger.Warn("dispatch.pending_failed",
+				"delivery_id", del.ID,
+				"err", err,
+			)
+			continue
+		}
+		ok++
+	}
+	return ok, nil
+}
+
 func buildShipmentRequest(a *awb.AWB, del *delivery.Delivery) ports.ShipmentRequest {
 	return ports.ShipmentRequest{
 		InternalAWB:    a.InternalAWB,

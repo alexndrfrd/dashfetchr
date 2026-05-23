@@ -20,7 +20,9 @@ type AWBRepository interface {
 type DeliveryRepository interface {
 	Save(ctx context.Context, d *delivery.Delivery) error
 	GetByID(ctx context.Context, id uuid.UUID) (*delivery.Delivery, error)
+	GetByCarrierExternalID(ctx context.Context, carrierID, externalID string) (*delivery.Delivery, error)
 	ListByAWB(ctx context.Context, awbID uuid.UUID) ([]*delivery.Delivery, error)
+	ListByState(ctx context.Context, state delivery.State, limit int) ([]*delivery.Delivery, error)
 }
 
 // RoutingDecisionRepository stores audit records for carrier selection.

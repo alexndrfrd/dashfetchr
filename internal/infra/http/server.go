@@ -24,7 +24,7 @@ func NewServer(application *app.App, cfg config.HTTPConfig, log *slog.Logger) ht
 	r.Use(chimw.RealIP)
 	r.Use(chimw.Timeout(60 * time.Second))
 
-	health := handlers.Health{}
+	health := handlers.Health{App: application}
 	r.Get("/healthz", health.Liveness)
 	r.Get("/readyz", health.Readiness)
 

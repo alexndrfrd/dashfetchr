@@ -1,4 +1,4 @@
-.PHONY: help tidy build test test-contract test-contract-all lint run-api run-dispatcher run-webhook migrate migrate-down docker-up docker-down clean
+.PHONY: help tidy build test test-integration test-contract test-contract-all lint run-api run-dispatcher run-webhook migrate migrate-down docker-up docker-down demo clean
 
 help:
 	@echo "DashFetchr Makefile"
@@ -34,6 +34,9 @@ build:
 test:
 	$(GO) test ./...
 
+test-integration:
+	$(GO) test -tags=integration ./internal/infra/postgres/... -count=1 -v
+
 # Run contract tests for a specific carrier.
 # Usage: make test-contract CARRIER=bolt
 test-contract:
@@ -67,6 +70,10 @@ docker-up:
 
 docker-down:
 	docker compose down
+
+demo:
+	@chmod +x scripts/demo.sh
+	@./scripts/demo.sh
 
 clean:
 	rm -rf bin

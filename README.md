@@ -4,7 +4,7 @@
 
 ---
 
-## Status: pre-development (scaffold + docs)
+## Status: MVP foundation (backend + Postgres)
 
 **DashFetchr** — concierge delivery from locker to your door, on your schedule.
 
@@ -56,13 +56,15 @@ dashfetchr/
 ## Workflow de dezvoltare (dupa kickoff)
 
 ```bash
-# Local
-docker compose up -d              # Postgres, Redis, LocalStack S3
-make migrate                       # Apply migrations
-make run-api                       # Start API
-make run-dispatcher                # Start dispatcher
-make test                          # Unit + contract tests
-make test-contract CARRIER=bolt    # Test specific adapter
+cp .env.example .env
+make docker-up                     # Postgres, Redis, LocalStack S3
+make migrate                       # Apply migrations (golang-migrate CLI)
+USE_MEMORY_STORE=false make run-api
+make run-dispatcher
+make demo                          # E2E curl script (API must be running)
+make test
+make test-integration              # Postgres integration tests
+make test-contract CARRIER=bolt
 ```
 
 ## Pasii urmatori

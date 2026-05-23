@@ -1,6 +1,6 @@
 # Schelet arhitectural — ghid rapid
 
-Repository-ul are acum **straturi complete** (nu doar domain + un adapter):
+Repository-ul are straturi complete (domain + adapters + Postgres):
 
 ```
 cmd/                    → binaries (api, dispatcher, webhook-listener)
@@ -12,34 +12,53 @@ internal/
   carrier/              → registry + wire carriers
   adapters/carriers/    → Bolt template (+ README pentru restul)
   infra/
-    memory/             → repos in-memory (dev fără Postgres)
+    memory/             → repos in-memory (dev rapid fără Docker)
+    postgres/           → repos Postgres (recomandat)
     events/             → event bus in-memory
     http/               → chi router + handlers + middleware
-    postgres/           → placeholder M1
 tests/contract/         → contract tests per carrier
-migrations/             → schema Postgres
+migrations/             → schema Postgres + seed dev retailer
+scripts/demo.sh         → flux E2E curl
 ```
 
-## Rulează local (fără Postgres)
+## Rulează local (Postgres — recomandat)
 
 ```bash
-cd /Users/xndr/Projects/riders
-go run ./cmd/api
+cp .env.example .env
+make docker-up
+make migrate
+USE_MEMORY_STORE=false go run ./cmd/api
 ```
 
-Implicit `USE_MEMORY_STORE=true` — datele dispar la restart.
+Sau fără Postgres (date pierdute la restart):
 
-## API disponibil (schelet funcțional)
+```bash
+USE_MEMORY_STORE=true go run ./cmd/api
+```
+
+## Demo E2E (curl)
+
+Cu API pornit și migrările aplicate:
+
+```bash
+chmod +x scripts/demo.sh
+./scripts/demo.sh
+# sau: make demo
+```
+
+## API disponibil
 
 | Method | Path | Rol |
 |--------|------|-----|
 | GET | `/healthz` | Liveness |
-| GET | `/readyz` | Readiness |
+| GET | `/readyz` | Readiness (ping Postgres când nu e memory) |
 | POST | `/v1/bookings` | Client programează locker → casă |
 | GET | `/v1/bookings/{deliveryID}` | Status + lanț custody |
 | POST | `/v1/bookings/{deliveryID}/dispatch` | Trimite la carrier (Bolt API real dacă ai key) |
 | POST | `/v1/deliveries/{deliveryID}/custody` | Rider: poză + GPS + timestamp |
-| POST | `/webhooks/bolt` | Webhook Bolt (pe port 8080 sau listener 8081) |
+| POST | `/webhooks/bolt` | Webhook Bolt |
+
+Retailer dev (seed): `00000000-0000-0000-0000-000000000001`
 
 ### Exemplu booking
 
@@ -66,45 +85,59 @@ curl -s -X POST http://localhost:8080/v1/bookings \
   }"
 ```
 
-Răspunsul conține `delivery_id` — folosește-l pentru GET, dispatch, custody.
-
-### Exemplu custody (poză obligatorie la pickup/delivery)
+### Dispatcher (pending → carrier)
 
 ```bash
-DELIVERY_ID="<din răspunsul de mai sus>"
+USE_MEMORY_STORE=false go run ./cmd/dispatcher
+```
 
-curl -s -X POST "http://localhost:8080/v1/deliveries/$DELIVERY_ID/custody" \
+Poll la fiecare 30s (`DISPATCH_POLL_INTERVAL`), max 20 comenzi (`DISPATCH_BATCH_SIZE`).
+
+### Webhook Bolt (după dispatch)
+
+```bash
+curl -s -X POST http://localhost:8080/webhooks/bolt \
   -H 'Content-Type: application/json' \
+  -H 'X-Bolt-Signature: <dacă e configurat>' \
   -d '{
-    "type": "package.picked_up",
-    "actor": {"type": "rider", "carrier_id": "bolt_food", "id": "r1", "name": "Andrei"},
-    "location": {"lat": 44.4546, "lng": 26.0987, "accuracy_m": 8},
-    "photos": [{"s3_uri": "s3://pod/demo.jpg", "sha256": "abc123"}]
+    "event": "order.delivered",
+    "order_id": "<carrier_external_id din dispatch>",
+    "timestamp": "2026-05-20T19:30:00Z",
+    "location": {"lat": 44.4632, "lng": 26.1062},
+    "photo_url": "https://example.com/pod.jpg"
   }'
 ```
 
 ## Flux în cod
 
-1. **Booking** (`app/booking`) → creează AWB + Delivery `pending`
-2. **Dispatch** (`app/dispatch`) → routing engine → `CarrierPort.CreateShipment`
-3. **Webhook** (`app/webhook`) → `ParseWebhook` → custody (M1: legătură delivery ID)
-4. **Custody** (`app/custodyapp`) → `Ledger.Record` (hash chain) + update delivery state
+1. **Booking** (`app/booking`) → AWB + Delivery `pending`
+2. **Dispatch** (`app/dispatch`) → routing → `CreateShipment` → `assigned` + `carrier_external_id`
+3. **Webhook** (`app/webhook`) → lookup by `carrier_external_id` → custody + state
+4. **Custody** (`app/custodyapp`) → `Ledger.Record` (hash chain) + delivery state
 
-## Ce lipsește (M1, după OK produs)
+## Ce lipsește (după sign-off produs)
 
-- Repos Postgres (`infra/postgres`)
 - Plată Stripe/Netopia
 - Notificări WhatsApp/SMS
 - Upload poze S3 presigned
 - Auth (OTP client, API key retailer)
 - Frontend PWA + admin dashboard
 
+## Teste & CI
+
+```bash
+go test ./...
+make test-integration   # necesită Postgres + migrate
+```
+
+GitHub Actions: `.github/workflows/ci.yml` — unit + migrate + integration + build.
+
 ## Enforce arhitectură
 
 ```bash
 go build ./...
 go test ./...
-# go-arch-lint check   # după install
+# go-arch-lint check
 ```
 
-`internal/core` nu importă `internal/adapters` — verificat în `.go-arch-lint.yml`.
+`internal/core` nu importă `internal/adapters`.

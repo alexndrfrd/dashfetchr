@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"dashfetchr/internal/core/awb"
+	"dashfetchr/internal/ports"
 )
 
 // AWBRepo is an in-memory AWBRepository for local development.
@@ -42,7 +43,7 @@ func (r *AWBRepo) GetByID(ctx context.Context, id uuid.UUID) (*awb.AWB, error) {
 	defer r.mu.RUnlock()
 	a, ok := r.byID[id]
 	if !ok {
-		return nil, fmt.Errorf("memory: awb %s not found", id)
+		return nil, ports.ErrNotFound
 	}
 	return cloneAWB(a), nil
 }
@@ -53,7 +54,7 @@ func (r *AWBRepo) GetByInternalAWB(ctx context.Context, internalAWB string) (*aw
 	defer r.mu.RUnlock()
 	id, ok := r.byAWB[internalAWB]
 	if !ok {
-		return nil, fmt.Errorf("memory: awb %q not found", internalAWB)
+		return nil, ports.ErrNotFound
 	}
 	return cloneAWB(r.byID[id]), nil
 }
