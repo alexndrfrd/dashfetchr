@@ -57,6 +57,7 @@ func Load() Config {
 				BaseURL:       env("BOLT_BASE_URL", "https://node.bolt.eu"),
 				APIKey:        env("BOLT_API_KEY", ""),
 				WebhookSecret: env("BOLT_WEBHOOK_SECRET", "local-dev-secret"),
+				RiderSecret:   env("BOLT_RIDER_SECRET", "local-dev-rider-secret"),
 				ServiceArea:   env("BOLT_SERVICE_AREA", "bucharest"),
 				Sandbox:       boolEnv("BOLT_SANDBOX", true),
 			},

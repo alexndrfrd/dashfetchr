@@ -35,6 +35,7 @@ type Config struct {
 	BaseURL       string // e.g. https://node.bolt.eu or sandbox
 	APIKey        string
 	WebhookSecret string
+	RiderSecret   string // shared secret for Bolt rider apps calling /custody
 	ServiceArea   string // e.g. "bucharest"
 	Sandbox       bool
 }

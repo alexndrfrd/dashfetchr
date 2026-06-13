@@ -35,7 +35,8 @@ type App struct {
 	Bus      ports.EventBus
 	Pool     *pgxpool.Pool // nil when using in-memory storage
 
-	Retailers ports.RetailerRepository
+	Retailers   ports.RetailerRepository
+	RiderSecrets map[string]string // carrier_id → shared secret for rider auth
 
 	Booking  *booking.Service
 	Dispatch *dispatch.Service
@@ -93,13 +94,18 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		Logger:     logger,
 	})
 
+	riderSecrets := map[string]string{
+		"bolt_food": cfg.Carriers.Bolt.RiderSecret,
+	}
+
 	return &App{
-		Config:    cfg,
-		Logger:    logger,
-		Carriers:  reg,
-		Bus:       bus,
-		Pool:      pool,
-		Retailers: retailerRepo,
+		Config:       cfg,
+		Logger:       logger,
+		Carriers:     reg,
+		Bus:          bus,
+		Pool:         pool,
+		Retailers:    retailerRepo,
+		RiderSecrets: riderSecrets,
 		Booking: booking.New(booking.Deps{
 			AWBs:       awbRepo,
 			Deliveries: delRepo,

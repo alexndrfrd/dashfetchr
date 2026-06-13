@@ -4,17 +4,59 @@ package postgres_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 
+	"dashfetchr/internal/auth"
 	"dashfetchr/internal/core/awb"
 	"dashfetchr/internal/core/custody"
 	"dashfetchr/internal/core/delivery"
 	"dashfetchr/internal/infra/postgres"
+	"dashfetchr/internal/ports"
 )
+
+func TestRetailerRepo(t *testing.T) {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		url = "postgres://dashfetchr:dashfetchr@localhost:5432/dashfetchr?sslmode=disable"
+	}
+
+	ctx := context.Background()
+	pool, err := postgres.NewPool(ctx, url, 4)
+	if err != nil {
+		t.Skipf("postgres not available: %v", err)
+	}
+	defer pool.Close()
+
+	repo := postgres.NewRetailerRepo(pool)
+
+	const devKey = "df_dev_pilot_2026"
+	devRetailerID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+
+	t.Run("found by valid key hash", func(t *testing.T) {
+		ret, err := repo.GetByAPIKeyHash(ctx, auth.HashAPIKey(devKey))
+		if err != nil {
+			t.Fatalf("expected retailer, got err: %v", err)
+		}
+		if ret.ID != devRetailerID {
+			t.Fatalf("wrong retailer id: %s", ret.ID)
+		}
+		if !ret.IsActive {
+			t.Fatal("expected retailer to be active")
+		}
+	})
+
+	t.Run("not found for unknown hash", func(t *testing.T) {
+		_, err := repo.GetByAPIKeyHash(ctx, auth.HashAPIKey("totally-wrong-key"))
+		if !errors.Is(err, ports.ErrNotFound) {
+			t.Fatalf("expected ErrNotFound, got: %v", err)
+		}
+	})
+}
 
 func TestReposRoundTrip(t *testing.T) {
 	url := os.Getenv("DATABASE_URL")

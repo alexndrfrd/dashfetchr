@@ -41,8 +41,11 @@ func NewServer(application *app.App, cfg config.HTTPConfig, log *slog.Logger) ht
 			r.Post("/bookings/{deliveryID}/dispatch", bookings.Dispatch)
 		})
 
-		// Rider-facing custody endpoint (carrier/rider auth — TODO, separate flow).
-		r.Post("/deliveries/{deliveryID}/custody", custodyH.Record)
+		// Rider-facing custody endpoint — requires carrier bearer token.
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRider(application.RiderSecrets, log))
+			r.Post("/deliveries/{deliveryID}/custody", custodyH.Record)
+		})
 	})
 
 	r.Route("/webhooks", func(r chi.Router) {

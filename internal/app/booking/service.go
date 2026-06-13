@@ -59,12 +59,12 @@ type CreateBookingInput struct {
 
 // CreateBookingResult is returned to the PWA after a successful booking.
 type CreateBookingResult struct {
-	AWBID           uuid.UUID
-	InternalAWB     string
-	DeliveryID      uuid.UUID
-	QuotedPriceMinor int64
-	Currency        string
-	State           string
+	AWBID            uuid.UUID `json:"awb_id"`
+	InternalAWB      string    `json:"internal_awb"`
+	DeliveryID       uuid.UUID `json:"delivery_id"`
+	QuotedPriceMinor int64     `json:"quoted_price_minor"`
+	Currency         string    `json:"currency"`
+	State            string    `json:"state"`
 }
 
 // CreateBooking creates the AWB + last-mile delivery leg in pending state.

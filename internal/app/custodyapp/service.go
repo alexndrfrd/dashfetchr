@@ -89,8 +89,16 @@ func (s *Service) VerifyChain(ctx context.Context, deliveryID uuid.UUID) error {
 
 func (s *Service) applyDeliveryTransition(del *delivery.Delivery, t custody.EventType) error {
 	switch t {
+	case custody.EventRiderAssigned:
+		return del.Transition(delivery.StateAssigned, "")
+	case custody.EventRiderArrivedAtLocker:
+		return del.Transition(delivery.StateEnRoutePickup, "")
 	case custody.EventPackagePickedUp:
 		return del.MarkPickedUp(time.Now().UTC())
+	case custody.EventRiderInTransit:
+		return del.Transition(delivery.StateInTransit, "")
+	case custody.EventRiderArrivedAtDestination:
+		return del.Transition(delivery.StateEnRouteDrop, "")
 	case custody.EventPackageDelivered:
 		return del.MarkDelivered(time.Now().UTC())
 	case custody.EventDeliveryFailed:
