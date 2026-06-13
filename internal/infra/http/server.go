@@ -33,10 +33,15 @@ func NewServer(application *app.App, cfg config.HTTPConfig, log *slog.Logger) ht
 	webhooks := handlers.Webhooks{App: application}
 
 	r.Route("/v1", func(r chi.Router) {
-		r.Post("/bookings", bookings.Create)
-		r.Get("/bookings/{deliveryID}", bookings.Get)
-		r.Post("/bookings/{deliveryID}/dispatch", bookings.Dispatch)
+		// Retailer-facing endpoints require an API key.
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRetailer(application.Retailers, log))
+			r.Post("/bookings", bookings.Create)
+			r.Get("/bookings/{deliveryID}", bookings.Get)
+			r.Post("/bookings/{deliveryID}/dispatch", bookings.Dispatch)
+		})
 
+		// Rider-facing custody endpoint (carrier/rider auth — TODO, separate flow).
 		r.Post("/deliveries/{deliveryID}/custody", custodyH.Record)
 	})
 

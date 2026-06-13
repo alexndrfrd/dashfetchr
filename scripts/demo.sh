@@ -4,7 +4,8 @@
 set -euo pipefail
 
 API="${API:-http://localhost:8080}"
-RETAILER_ID="${RETAILER_ID:-00000000-0000-0000-0000-000000000001}"
+# Dev pilot retailer API key (seeded by migration 0003 / in-memory store).
+API_KEY="${API_KEY:-df_dev_pilot_2026}"
 
 SLOT_START=$(date -u -v+1H +"%Y-%m-%dT%H:00:00+00:00" 2>/dev/null || date -u -d "+1 hour" +"%Y-%m-%dT%H:00:00+00:00")
 SLOT_END=$(date -u -v+2H +"%Y-%m-%dT%H:00:00+00:00" 2>/dev/null || date -u -d "+2 hours" +"%Y-%m-%dT%H:00:00+00:00")
@@ -15,8 +16,8 @@ curl -sf "$API/healthz" | jq .
 echo "==> Create booking"
 BOOKING=$(curl -sf -X POST "$API/v1/bookings" \
   -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $API_KEY" \
   -d "{
-    \"retailer_id\": \"$RETAILER_ID\",
     \"external_awb\": \"SD-DEMO-001\",
     \"external_carrier\": \"sameday\",
     \"customer_phone\": \"+40712345678\",
@@ -40,7 +41,7 @@ if [[ -z "$DELIVERY_ID" || "$DELIVERY_ID" == "null" ]]; then
 fi
 
 echo "==> Get booking"
-curl -sf "$API/v1/bookings/$DELIVERY_ID" | jq .
+curl -sf "$API/v1/bookings/$DELIVERY_ID" -H "Authorization: Bearer $API_KEY" | jq .
 
 echo "==> Custody: picked up"
 curl -sf -X POST "$API/v1/deliveries/$DELIVERY_ID/custody" \
@@ -63,6 +64,6 @@ curl -sf -X POST "$API/v1/deliveries/$DELIVERY_ID/custody" \
   }' | jq .
 
 echo "==> Final status"
-curl -sf "$API/v1/bookings/$DELIVERY_ID" | jq .
+curl -sf "$API/v1/bookings/$DELIVERY_ID" -H "Authorization: Bearer $API_KEY" | jq .
 
 echo "Done. delivery_id=$DELIVERY_ID"

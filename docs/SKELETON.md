@@ -48,27 +48,40 @@ chmod +x scripts/demo.sh
 
 ## API disponibil
 
-| Method | Path | Rol |
-|--------|------|-----|
-| GET | `/healthz` | Liveness |
-| GET | `/readyz` | Readiness (ping Postgres când nu e memory) |
-| POST | `/v1/bookings` | Client programează locker → casă |
-| GET | `/v1/bookings/{deliveryID}` | Status + lanț custody |
-| POST | `/v1/bookings/{deliveryID}/dispatch` | Trimite la carrier (Bolt API real dacă ai key) |
-| POST | `/v1/deliveries/{deliveryID}/custody` | Rider: poză + GPS + timestamp |
-| POST | `/webhooks/bolt` | Webhook Bolt |
+| Method | Path | Auth | Rol |
+|--------|------|------|-----|
+| GET | `/healthz` | — | Liveness |
+| GET | `/readyz` | — | Readiness (ping Postgres când nu e memory) |
+| POST | `/v1/bookings` | API key retailer | Client programează locker → casă |
+| GET | `/v1/bookings/{deliveryID}` | API key retailer | Status + lanț custody (doar bookings proprii) |
+| POST | `/v1/bookings/{deliveryID}/dispatch` | API key retailer | Trimite la carrier (Bolt API real dacă ai key) |
+| POST | `/v1/deliveries/{deliveryID}/custody` | — (rider, TODO) | Rider: poză + GPS + timestamp |
+| POST | `/webhooks/bolt` | semnătură Bolt | Webhook Bolt |
 
+## Autentificare retailer
+
+Endpoint-urile `/v1/bookings*` cer un API key per retailer:
+
+```
+Authorization: Bearer <api_key>
+```
+
+Cheia e stocată hash-uită (SHA-256) în `retailers.api_key_hash`; `retailer_id` nu
+se mai trimite în body — vine din cheie. Un booking poate fi citit/dispatch-uit
+doar de retailerul care l-a creat (altfel `404`).
+
+Cheie dev (seed local — migrația 0003 / store in-memory): `df_dev_pilot_2026`
 Retailer dev (seed): `00000000-0000-0000-0000-000000000001`
 
 ### Exemplu booking
 
 ```bash
-RETAILER_ID="00000000-0000-0000-0000-000000000001"
+API_KEY="df_dev_pilot_2026"
 
 curl -s -X POST http://localhost:8080/v1/bookings \
   -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $API_KEY" \
   -d "{
-    \"retailer_id\": \"$RETAILER_ID\",
     \"external_awb\": \"SD123456\",
     \"external_carrier\": \"sameday\",
     \"customer_phone\": \"+40712345678\",

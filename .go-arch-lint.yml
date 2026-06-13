@@ -13,6 +13,8 @@ components:
     in: internal/ports/**
   core:
     in: internal/core/**
+  auth:
+    in: internal/auth/**
   adapters:
     in: internal/adapters/**
   infra:
@@ -36,6 +38,10 @@ deps:
   ports:
     mayDependOn:
       - ports
+      - core
+  auth:
+    mayDependOn:
+      - core
   adapters:
     mayDependOn:
       - ports
@@ -44,6 +50,7 @@ deps:
     mayDependOn:
       - ports
       - core
+      - auth
       - app
       - carrier_registry
   carrier_registry:

@@ -10,6 +10,7 @@ import (
 
 	"dashfetchr/internal/app"
 	"dashfetchr/internal/app/booking"
+	"dashfetchr/internal/auth"
 	"dashfetchr/internal/infra/http/response"
 )
 
@@ -18,39 +19,39 @@ type Bookings struct {
 }
 
 type createBookingRequest struct {
-	RetailerID      string  `json:"retailer_id"`
-	ExternalAWB     string  `json:"external_awb"`
-	ExternalCarrier string  `json:"external_carrier"`
-	CustomerPhone   string  `json:"customer_phone"`
-	CustomerName    string  `json:"customer_name"`
-	PickupLockerID  string  `json:"pickup_locker_id"`
-	PickupLat       float64 `json:"pickup_lat"`
-	PickupLng       float64 `json:"pickup_lng"`
-	PickupAddress   string  `json:"pickup_address"`
-	DropLat         float64 `json:"drop_lat"`
-	DropLng         float64 `json:"drop_lng"`
-	DropAddress     string  `json:"drop_address"`
-	DropFloor       string  `json:"drop_floor"`
-	DropApartment   string  `json:"drop_apartment"`
-	DropInstructions string `json:"drop_instructions"`
-	WeightKg        float64 `json:"weight_kg"`
-	SlotStart       string  `json:"slot_start"` // RFC3339
-	SlotEnd         string  `json:"slot_end"`
-	LastMileCarrier string  `json:"last_mile_carrier,omitempty"`
+	ExternalAWB      string  `json:"external_awb"`
+	ExternalCarrier  string  `json:"external_carrier"`
+	CustomerPhone    string  `json:"customer_phone"`
+	CustomerName     string  `json:"customer_name"`
+	PickupLockerID   string  `json:"pickup_locker_id"`
+	PickupLat        float64 `json:"pickup_lat"`
+	PickupLng        float64 `json:"pickup_lng"`
+	PickupAddress    string  `json:"pickup_address"`
+	DropLat          float64 `json:"drop_lat"`
+	DropLng          float64 `json:"drop_lng"`
+	DropAddress      string  `json:"drop_address"`
+	DropFloor        string  `json:"drop_floor"`
+	DropApartment    string  `json:"drop_apartment"`
+	DropInstructions string  `json:"drop_instructions"`
+	WeightKg         float64 `json:"weight_kg"`
+	SlotStart        string  `json:"slot_start"` // RFC3339
+	SlotEnd          string  `json:"slot_end"`
+	LastMileCarrier  string  `json:"last_mile_carrier,omitempty"`
 }
 
 func (h Bookings) Create(w http.ResponseWriter, r *http.Request) {
+	ret, ok := auth.RetailerFromContext(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthenticated", "missing retailer context")
+		return
+	}
+
 	var body createBookingRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid_json", err.Error())
 		return
 	}
 
-	retailerID, err := uuid.Parse(body.RetailerID)
-	if err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid_retailer_id", "retailer_id must be a UUID")
-		return
-	}
 	slotStart, err := time.Parse(time.RFC3339, body.SlotStart)
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid_slot_start", "use RFC3339")
@@ -63,7 +64,7 @@ func (h Bookings) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	out, err := h.App.Booking.CreateBooking(r.Context(), booking.CreateBookingInput{
-		RetailerID:       retailerID,
+		RetailerID:       ret.ID,
 		ExternalAWB:      body.ExternalAWB,
 		ExternalCarrier:  body.ExternalCarrier,
 		CustomerPhone:    body.CustomerPhone,
@@ -92,6 +93,12 @@ func (h Bookings) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h Bookings) Get(w http.ResponseWriter, r *http.Request) {
+	ret, ok := auth.RetailerFromContext(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthenticated", "missing retailer context")
+		return
+	}
+
 	id, err := uuid.Parse(chi.URLParam(r, "deliveryID"))
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid_id", "deliveryID must be UUID")
@@ -101,6 +108,12 @@ func (h Bookings) Get(w http.ResponseWriter, r *http.Request) {
 	del, awb, err := h.App.Booking.GetBooking(r.Context(), id)
 	if err != nil {
 		response.Error(w, http.StatusNotFound, "not_found", err.Error())
+		return
+	}
+	// Ownership: don't leak other retailers' bookings; 404 rather than 403 to
+	// avoid confirming the ID exists.
+	if awb.RetailerID != ret.ID {
+		response.Error(w, http.StatusNotFound, "not_found", "booking not found")
 		return
 	}
 
@@ -114,11 +127,29 @@ func (h Bookings) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h Bookings) Dispatch(w http.ResponseWriter, r *http.Request) {
+	ret, ok := auth.RetailerFromContext(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthenticated", "missing retailer context")
+		return
+	}
+
 	id, err := uuid.Parse(chi.URLParam(r, "deliveryID"))
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid_id", "deliveryID must be UUID")
 		return
 	}
+
+	// Ownership check before dispatching someone else's delivery.
+	_, awb, err := h.App.Booking.GetBooking(r.Context(), id)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "not_found", err.Error())
+		return
+	}
+	if awb.RetailerID != ret.ID {
+		response.Error(w, http.StatusNotFound, "not_found", "booking not found")
+		return
+	}
+
 	if err := h.App.Dispatch.DispatchDelivery(r.Context(), id); err != nil {
 		response.Error(w, http.StatusUnprocessableEntity, "dispatch_failed", err.Error())
 		return

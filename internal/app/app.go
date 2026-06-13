@@ -35,6 +35,8 @@ type App struct {
 	Bus      ports.EventBus
 	Pool     *pgxpool.Pool // nil when using in-memory storage
 
+	Retailers ports.RetailerRepository
+
 	Booking  *booking.Service
 	Dispatch *dispatch.Service
 	Custody  *custodyapp.Service
@@ -56,6 +58,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	var delRepo ports.DeliveryRepository
 	var routingRepo ports.RoutingDecisionRepository
 	var custodyRepo custody.Repository
+	var retailerRepo ports.RetailerRepository
 	var pool *pgxpool.Pool
 
 	if cfg.DB.UseMemory {
@@ -63,6 +66,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		delRepo = memory.NewDeliveryRepo()
 		routingRepo = memory.NewRoutingRepo()
 		custodyRepo = memory.NewCustodyRepo()
+		retailerRepo = memory.NewRetailerRepo()
 		logger.Info("storage: in-memory (set USE_MEMORY_STORE=false for Postgres)")
 	} else {
 		ctx := context.Background()
@@ -74,6 +78,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		delRepo = postgres.NewDeliveryRepo(pool)
 		routingRepo = postgres.NewRoutingRepo(pool)
 		custodyRepo = postgres.NewCustodyRepo(pool)
+		retailerRepo = postgres.NewRetailerRepo(pool)
 		logger.Info("storage: postgres", "url", redactDBURL(cfg.DB.URL))
 	}
 
@@ -89,11 +94,12 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	})
 
 	return &App{
-		Config:   cfg,
-		Logger:   logger,
-		Carriers: reg,
-		Bus:      bus,
-		Pool:     pool,
+		Config:    cfg,
+		Logger:    logger,
+		Carriers:  reg,
+		Bus:       bus,
+		Pool:      pool,
+		Retailers: retailerRepo,
 		Booking: booking.New(booking.Deps{
 			AWBs:       awbRepo,
 			Deliveries: delRepo,
